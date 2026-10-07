@@ -99,6 +99,17 @@ class DocumentPipeline:
         # Canonical normalization
         normalized = normalize_blocks(all_blocks)
 
+        # Generate page previews (120 DPI JPEG) for instant canvas rendering in UI
+        page_images: Dict[int, str] = {}
+        for p_idx in range(min(num_pages, 25)):
+            p_num = p_idx + 1
+            page = pdf_doc[p_idx]
+            try:
+                r_prev = self.renderer.render_page(page, p_num, doc_id, dpi=120)
+                page_images[p_num] = f"data:image/jpeg;base64,{self.renderer.image_to_base64_jpeg(r_prev.image, quality=75)}"
+            except Exception:
+                pass
+
         # Build Document-level metadata and router summary
         summary = self._summarize_router(normalized)
         warnings = [
@@ -117,6 +128,7 @@ class DocumentPipeline:
             "router_summary": summary,
             "warnings": warnings,
             "blocks": normalized,
+            "page_images": page_images,
         }
 
     def _process_single_image(self, img_bytes: bytes, filename: str, doc_id: str) -> Dict[str, Any]:
@@ -141,6 +153,8 @@ class DocumentPipeline:
         visual_blocks = self._extract_visual_page(render_res, 1)
         normalized = normalize_blocks(visual_blocks)
 
+        page_images = {1: f"data:image/jpeg;base64,{self.renderer.image_to_base64_jpeg(pil_img, quality=80)}"}
+
         return {
             "document_id": doc_id,
             "filename": filename,
@@ -155,6 +169,7 @@ class DocumentPipeline:
                 if b.get("warnings")
             ],
             "blocks": normalized,
+            "page_images": page_images,
         }
 
     def _extract_digital_page(self, page: pymupdf.Page, page_num: int) -> List[Dict[str, Any]]:
